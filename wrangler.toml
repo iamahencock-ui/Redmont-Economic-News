@@ -6,4 +6,4 @@ compatibility_date = "2026-06-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "ren-db"
-database_id = "REPLACE_WITH_YOUR_D1_ID"
+database_id = "988c6817-a279-40e7-a4ea-225c66e50154"
