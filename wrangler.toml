@@ -1,0 +1,9 @@
+name = "redmont-economic-news"
+main = "src/index.js"
+compatibility_date = "2026-06-01"
+
+# After `npx wrangler d1 create ren-db`, paste the printed database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "ren-db"
+database_id = "REPLACE_WITH_YOUR_D1_ID"

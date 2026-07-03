@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redmont's Economic News — style preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ---- design tokens: swap these once we read the live site ---- */
+    --paper:   #FAF7F0;   /* warm cream background */
+    --ink:     #171512;   /* near-black text */
+    --muted:   #6f6a5f;   /* secondary text */
+    --rule:    #171512;   /* strong hairlines */
+    --rule-soft:#e2dccf;  /* light hairlines / row dividers */
+    --accent:  #A6873C;   /* bronze/gold (categories, icons) */
+    --danger:  #C24333;   /* delete red */
+    --serif: "Playfair Display", Georgia, serif;
+    --mono: "IBM Plex Mono", "Courier New", monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--paper); color:var(--ink); font-family:var(--serif); }
+  .wrap { max-width:1280px; margin:0 auto; padding:0 32px; }
+
+  /* top bar */
+  .topbar { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--rule-soft); }
+  .topbar .date { font-family:var(--mono); font-size:11px; letter-spacing:.25em; text-transform:uppercase; }
+  .chips { display:flex; gap:10px; }
+  .chip { font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase; border:1px solid var(--ink); padding:5px 12px; text-decoration:none; color:var(--ink); display:inline-flex; align-items:center; gap:6px; background:transparent; }
+  .chip:hover { background:var(--ink); color:var(--paper); }
+
+  /* masthead */
+  .masthead { text-align:center; padding:44px 0 30px; }
+  .masthead h1 { font-family:var(--serif); font-weight:500; font-size:64px; letter-spacing:-.01em; }
+  .masthead .tagline { font-family:var(--mono); font-size:11px; letter-spacing:.35em; text-transform:uppercase; color:var(--muted); margin-top:14px; }
+
+  /* nav */
+  nav { border-top:1px solid var(--rule-soft); border-bottom:1px solid var(--rule-soft); }
+  nav ul { display:flex; justify-content:center; gap:48px; list-style:none; padding:16px 0; }
+  nav a { font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase; text-decoration:none; color:var(--ink); }
+  nav a:hover, nav a.active { border-bottom:2px solid var(--accent); padding-bottom:4px; }
+
+  /* section heading (admin style) */
+  .section-head { display:flex; align-items:flex-start; gap:14px; padding:56px 0 8px; }
+  .section-head .icon { color:var(--accent); font-size:20px; margin-top:2px; }
+  .section-head .kicker { font-family:var(--mono); font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:var(--accent); }
+  .section-head h2 { font-family:var(--serif); font-weight:400; font-size:26px; margin-top:6px; }
+
+  /* tabs */
+  .tabs { display:flex; gap:36px; border-bottom:1px solid var(--rule-soft); margin-top:28px; }
+  .tab { font-family:var(--mono); font-size:12px; letter-spacing:.2em; text-transform:uppercase; padding:12px 2px; text-decoration:none; color:var(--muted); display:inline-flex; gap:8px; align-items:center; }
+  .tab.active { color:var(--ink); border-bottom:2px solid var(--ink); }
+
+  /* list header row */
+  .list-meta { display:flex; justify-content:space-between; align-items:center; padding:34px 0 10px; }
+  .count { font-family:var(--mono); font-size:11px; letter-spacing:.25em; text-transform:uppercase; color:var(--muted); }
+  .btn-dark { font-family:var(--mono); font-size:11px; letter-spacing:.2em; text-transform:uppercase; background:var(--ink); color:var(--paper); border:0; padding:14px 22px; cursor:pointer; }
+  .btn-dark:hover { background:var(--accent); }
+
+  /* article rows */
+  .row { display:flex; justify-content:space-between; align-items:center; padding:26px 0; border-bottom:1px solid var(--rule-soft); }
+  .cat { font-family:var(--mono); font-size:10px; letter-spacing:.28em; text-transform:uppercase; color:var(--accent); }
+  .row h3 { font-family:var(--serif); font-weight:500; font-size:24px; text-transform:uppercase; letter-spacing:.01em; margin:6px 0; }
+  .row h3 a { color:var(--ink); text-decoration:none; }
+  .row h3 a:hover { color:var(--accent); }
+  .meta { font-family:var(--mono); font-size:11px; letter-spacing:.12em; color:var(--muted); display:flex; gap:14px; align-items:center; }
+  .row .actions { display:flex; gap:14px; }
+  .iconbtn { background:none; border:0; cursor:pointer; font-size:15px; color:var(--muted); }
+  .iconbtn:hover { color:var(--ink); }
+  .iconbtn.del { color:var(--danger); }
+
+  /* tier badges (for premium/vip lists) */
+  .badge { font-family:var(--mono); font-size:9px; letter-spacing:.2em; padding:3px 8px; border:1px solid var(--accent); color:var(--accent); text-transform:uppercase; }
+  .badge.vip { background:var(--ink); border-color:var(--ink); color:var(--accent); }
+
+  footer { margin-top:70px; border-top:1px solid var(--rule); padding:26px 0 60px; text-align:center; }
+  footer p { font-family:var(--mono); font-size:10px; letter-spacing:.25em; text-transform:uppercase; color:var(--muted); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <span class="date">Thursday, July 2, 2026</span>
+      <div class="chips">
+        <a class="chip" href="#">◎ Admin</a>
+        <a class="chip" href="#">⇥ Log out</a>
+      </div>
+    </div>
+
+    <header class="masthead">
+      <h1>Redmont&rsquo;s Economic News</h1>
+      <div class="tagline">Your news channel for the economy &nbsp;&middot;&nbsp; est. 2026</div>
+    </header>
+
+    <nav>
+      <ul>
+        <li><a href="#" class="active">Home</a></li>
+        <li><a href="#">Daily Report</a></li>
+        <li><a href="#">News Stories</a></li>
+        <li><a href="#">Announcements</a></li>
+        <li><a href="#">Premium</a></li>
+        <li><a href="#">Search</a></li>
+      </ul>
+    </nav>
+
+    <div class="section-head">
+      <span class="icon">🛡</span>
+      <div>
+        <div class="kicker">Administration</div>
+        <h2>Manage articles and user accounts</h2>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <a class="tab active" href="#">▤ Articles</a>
+      <a class="tab" href="#">👤 Accounts</a>
+      <a class="tab" href="#">✉ Messages</a>
+    </div>
+
+    <div class="list-meta">
+      <span class="count">32 articles on record</span>
+      <button class="btn-dark">+ New Article</button>
+    </div>
+
+    <div class="row">
+      <div>
+        <div class="cat">Banking</div>
+        <h3><a href="#">Comparing the business banks of DemocracyCraft.</a></h3>
+        <div class="meta"><span>Mailliwoail</span> · <span>Jul 2, 2026</span> · <span>👁 6</span></div>
+      </div>
+      <div class="actions">
+        <button class="iconbtn" title="Edit">✎</button>
+        <button class="iconbtn del" title="Delete">🗑</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <div class="cat">Economy</div>
+        <h3><a href="#">Redmont mini economic report: July 1, 2026.</a></h3>
+        <div class="meta"><span>Mailliwoail</span> · <span>Jul 1, 2026</span> · <span>👁 10</span></div>
+      </div>
+      <div class="actions">
+        <button class="iconbtn" title="Edit">✎</button>
+        <button class="iconbtn del" title="Delete">🗑</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <div class="cat">Economy <span class="badge">Premium</span></div>
+        <h3><a href="#">Exclusive: the legislature's secret budget amendments.</a></h3>
+        <div class="meta"><span>Mailliwoail</span> · <span>Jun 30, 2026</span> · <span>👁 24</span></div>
+      </div>
+      <div class="actions">
+        <button class="iconbtn" title="Edit">✎</button>
+        <button class="iconbtn del" title="Delete">🗑</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <div class="cat">Politics <span class="badge vip">VIP</span></div>
+        <h3><a href="#">Insider briefing: what the DEC won't announce yet.</a></h3>
+        <div class="meta"><span>Mailliwoail</span> · <span>Jun 29, 2026</span> · <span>👁 41</span></div>
+      </div>
+      <div class="actions">
+        <button class="iconbtn" title="Edit">✎</button>
+        <button class="iconbtn del" title="Delete">🗑</button>
+      </div>
+    </div>
+
+    <footer>
+      <p>Redmont&rsquo;s Economic News · The official digital broadsheet of DemocracyCraft</p>
+    </footer>
+  </div>
+</body>
+</html>
