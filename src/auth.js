@@ -98,9 +98,15 @@ export function canReadTier(user, tier) {
   // tier: 0 public, 1 premium, 2 vip. Staff read everything (they manage it).
   if (tier <= 0) return true;
   if (!user) return false;
-  if (user.is_admin) return true;
+  if (Number(user.is_admin) >= 1) return true;
   return (RANK[effectiveRole(user)] ?? 0) >= tier;
 }
+
+// Staff levels (is_admin column): 0 none · 1 writer · 2 admin.
 export function isAdmin(user) {
-  return !!(user && user.is_admin);
+  return !!user && Number(user.is_admin) >= 2;
+}
+export function isWriter(user) {
+  // writer OR admin — anyone allowed into the content side of the panel
+  return !!user && Number(user.is_admin) >= 1;
 }

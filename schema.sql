@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
   pass_hash TEXT NOT NULL,
   salt TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'reader' CHECK (role IN ('reader','premium','vip','admin')),
-  is_admin INTEGER NOT NULL DEFAULT 0,  -- staff flag, SEPARATE from subscription
+  is_admin INTEGER NOT NULL DEFAULT 0,  -- staff level: 0 none · 1 writer · 2 admin (SEPARATE from subscription)
   tier_expires_at INTEGER,          -- ms epoch; NULL = no expiry
   created_at INTEGER NOT NULL
 );

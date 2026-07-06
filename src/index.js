@@ -5,7 +5,7 @@
 import {
   hashPassword, verifyPassword, randomToken,
   createSession, destroySession, readSessionToken, getSessionUser,
-  sessionSetCookie, sessionClearCookie, effectiveRole, canReadTier, isAdmin,
+  sessionSetCookie, sessionClearCookie, effectiveRole, canReadTier, isAdmin, isWriter,
 } from "./auth.js";
 import {
   resolveFirm, recentTransactions, sumForMemo,
@@ -44,7 +44,7 @@ export default {
 
     try {
       const user = await getSessionUser(db, request);
-      const P = (t, act, body) => html(page({ title: t, user, active: act, body, isAdmin: isAdmin(user) }));
+      const P = (t, act, body) => html(page({ title: t, user, active: act, body, isAdmin: isWriter(user) }));
 
       
       // ---- public pages ----
@@ -97,9 +97,9 @@ export default {
         if (path === "/webhook/treasury") return handleWebhook(db, env, request, ctx);
       }
 
-      // ---- admin ----
+      // ---- admin (writers get the content tabs; admins get everything) ----
       if (path === "/admin" || path.startsWith("/admin/")) {
-        if (!user || !isAdmin(user)) return redirect("/login?next=/admin");
+        if (!user || !isWriter(user)) return redirect("/login?next=/admin");
         const out = await adminRouter(db, env, request, url, path, method, user);
         if (out) return out;
       }
@@ -270,9 +270,9 @@ async function doRegister(db, request) {
   const exists = await db.prepare("SELECT id FROM users WHERE username = ? OR email = ?").bind(username, email).first();
   if (exists) return redirect("/register?err=taken");
 
-  // First account on the site becomes staff (separate from subscription tier).
+  // First account on the site becomes admin staff (separate from subscription tier).
   const count = await db.prepare("SELECT COUNT(*) AS n FROM users").first();
-  const isFirst = count.n === 0 ? 1 : 0;
+  const isFirst = count.n === 0 ? 2 : 0;
 
   const salt = randomToken(16);
   const hash = await hashPassword(password, salt);
@@ -362,9 +362,9 @@ function accountPage(db, user, order) {
   const exp = user.tier_expires_at
     ? user.tier_expires_at < now() ? " (expired)" : ` — renews/expires ${fmtDate(user.tier_expires_at)}`
     : "";
-  const staffBox = user.is_admin
+  const staffBox = Number(user.is_admin) >= 1
     ? `<div class="paybox"><div class="kicker">Staff</div>
-       <h2 style="font-weight:500;margin:12px 0">Editorial staff — <a href="/admin">admin panel</a></h2>
+       <h2 style="font-weight:500;margin:12px 0">${Number(user.is_admin) >= 2 ? "Editorial staff (admin)" : "Writer"} — <a href="/admin">${Number(user.is_admin) >= 2 ? "admin panel" : "writer's desk"}</a></h2>
        <p class="meta">Staff access is separate from your subscription.</p></div>`
     : "";
   return `${sectionHead("Accounts", `Signed in as ${user.username}`, "👤")}
@@ -502,8 +502,9 @@ async function handleWebhook(db, env, request, ctx) {
 // === Admin ====================================================================
 
 async function adminRouter(db, env, request, url, path, method, user) {
+  const admin = isAdmin(user); // writers (level 1) get content tabs only
   const P = (body, tab) =>
-    html(page({ title: "Admin", user, body: adminShell(tab, body), isAdmin: true }));
+    html(page({ title: "Admin", user, body: adminShell(tab, body, admin), isAdmin: true }));
 
   if (method === "GET") {
     if (path === "/admin") {
@@ -511,6 +512,7 @@ async function adminRouter(db, env, request, url, path, method, user) {
       if (tab === "articles") return P(await adminArticles(db), "articles");
       if (tab === "reports") return P(await adminReports(db), "reports");
       if (tab === "announcements") return P(await adminAnnouncements(db), "announcements");
+      if (!admin) return redirect("/admin");
       if (tab === "accounts") return P(await adminAccounts(db, url), "accounts");
       if (tab === "messages") return P(await adminMessages(db), "messages");
       if (tab === "settings") return P(await adminSettings(db, env, url), "settings");
@@ -525,6 +527,8 @@ async function adminRouter(db, env, request, url, path, method, user) {
 
   if (method === "POST") {
     const f = await request.formData();
+    // Writers may only hit content routes; accounts/messages/settings are admin-only.
+    if (!admin && !/^\/admin\/(articles|reports|announcements)(\/|$)/.test(path)) return redirect("/admin");
     if (path === "/admin/articles/save") {
       const id = Number(f.get("id") || 0);
       const vals = {
@@ -578,8 +582,9 @@ async function adminRouter(db, env, request, url, path, method, user) {
       return redirect("/admin?tab=accounts");
     }
     if ((m = path.match(/^\/admin\/accounts\/(\d+)\/staff$/))) {
-      if (Number(m[1]) !== user.id) {
-        await db.prepare("UPDATE users SET is_admin = 1 - is_admin WHERE id = ?").bind(Number(m[1])).run();
+      const level = Number(f.get("level"));
+      if ([0, 1, 2].includes(level) && Number(m[1]) !== user.id) {
+        await db.prepare("UPDATE users SET is_admin = ? WHERE id = ?").bind(level, Number(m[1])).run();
       }
       return redirect("/admin?tab=accounts");
     }
@@ -622,16 +627,16 @@ async function adminRouter(db, env, request, url, path, method, user) {
   return null;
 }
 
-function adminShell(tab, inner) {
+function adminShell(tab, inner, admin = true) {
   const tabs = [
     ["articles", "▤ Articles"],
     ["reports", "🗞 Reports"],
     ["announcements", "📢 Announcements"],
-    ["accounts", "👤 Accounts"],
-    ["messages", "✉ Messages"],
-    ["settings", "⚙ Settings"],
+    ...(admin
+      ? [["accounts", "👤 Accounts"], ["messages", "✉ Messages"], ["settings", "⚙ Settings"]]
+      : []),
   ];
-  return `${sectionHead("Administration", "Manage articles and user accounts", "🛡")}
+  return `${sectionHead("Administration", admin ? "Manage articles and user accounts" : "Writer's desk — manage content", "🛡")}
     <div class="tabs">${tabs.map(([k, label]) => `<a class="tab${tab === k ? " active" : ""}" href="/admin?tab=${k}">${label}</a>`).join("")}</div>
     ${inner}`;
 }
@@ -701,11 +706,13 @@ async function adminAccounts(db, url) {
     ${results
       .map(
         (u) => `<tr>
-        <td>${esc(u.username)}${u.is_admin ? ' <span class="badge">Staff</span>' : ""}</td><td class="mono">${esc(u.email ?? "")}</td>
+        <td>${esc(u.username)}${u.is_admin >= 2 ? ' <span class="badge vip">Admin</span>' : u.is_admin === 1 ? ' <span class="badge">Writer</span>' : ""}</td><td class="mono">${esc(u.email ?? "")}</td>
         <td><form method="POST" action="/admin/accounts/${u.id}/role" style="display:flex;gap:8px">
           <select name="role">${["reader", "premium", "vip"].map((r) => `<option value="${r}"${u.role === r ? " selected" : ""}>${r}</option>`).join("")}</select>
           <button class="chip">Set</button></form></td>
-        <td><form method="POST" action="/admin/accounts/${u.id}/staff"><button class="chip"${u.is_admin ? ' style="background:var(--ink);color:var(--paper)"' : ""}>${u.is_admin ? "Revoke staff" : "Make staff"}</button></form></td>
+        <td><form method="POST" action="/admin/accounts/${u.id}/staff" style="display:flex;gap:8px">
+          <select name="level">${[[0, "none"], [1, "writer"], [2, "admin"]].map(([v, l]) => `<option value="${v}"${Number(u.is_admin) === v ? " selected" : ""}>${l}</option>`).join("")}</select>
+          <button class="chip">Set</button></form></td>
         <td class="mono">${u.tier_expires_at ? fmtDate(u.tier_expires_at) : "—"}</td>
         <td class="mono">${fmtDate(u.created_at)}</td>
         <td style="white-space:nowrap">
