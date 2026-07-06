@@ -269,15 +269,15 @@ async function doRegister(db, request) {
   const exists = await db.prepare("SELECT id FROM users WHERE username = ? OR email = ?").bind(username, email).first();
   if (exists) return redirect("/register?err=taken");
 
-  // First account on the site becomes the admin.
+  // First account on the site becomes staff (separate from subscription tier).
   const count = await db.prepare("SELECT COUNT(*) AS n FROM users").first();
-  const role = count.n === 0 ? "admin" : "reader";
+  const isFirst = count.n === 0 ? 1 : 0;
 
   const salt = randomToken(16);
   const hash = await hashPassword(password, salt);
   const r = await db
-    .prepare("INSERT INTO users (username, email, pass_hash, salt, role, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(username, email, hash, salt, role, now())
+    .prepare("INSERT INTO users (username, email, pass_hash, salt, role, is_admin, created_at) VALUES (?, ?, ?, ?, 'reader', ?, ?)")
+    .bind(username, email, hash, salt, isFirst, now())
     .run();
   const { token } = await createSession(db, r.meta.last_row_id);
   return redirect(next, { "Set-Cookie": sessionSetCookie(token) });
@@ -361,13 +361,18 @@ function accountPage(db, user, order) {
   const exp = user.tier_expires_at
     ? user.tier_expires_at < now() ? " (expired)" : ` — renews/expires ${fmtDate(user.tier_expires_at)}`
     : "";
+  const staffBox = user.is_admin
+    ? `<div class="paybox"><div class="kicker">Staff</div>
+       <h2 style="font-weight:500;margin:12px 0">Editorial staff — <a href="/admin">admin panel</a></h2>
+       <p class="meta">Staff access is separate from your subscription.</p></div>`
+    : "";
   return `${sectionHead("Accounts", `Signed in as ${user.username}`, "👤")}
     <div class="paybox">
       <div class="kicker">Subscription</div>
-      <h2 style="font-weight:500;margin:12px 0">${role === "admin" ? "Staff (admin)" : role.charAt(0).toUpperCase() + role.slice(1)}${esc(exp)}</h2>
+      <h2 style="font-weight:500;margin:12px 0">${role.charAt(0).toUpperCase() + role.slice(1)}${role === "reader" ? "" : esc(exp)}</h2>
       ${role === "reader" ? `<a class="btn" href="/premium">Upgrade</a>` : ""}
       ${order && order.status === "pending" ? `<p class="meta" style="margin-top:14px">You have a pending ${esc(order.tier)} order — <a href="/premium">finish payment</a>.</p>` : ""}
-    </div>`;
+    </div>${staffBox}`;
 }
 
 // === Premium / paywall ========================================================
@@ -423,8 +428,8 @@ async function premiumPage(db, env, user, url) {
       (function poll(){setTimeout(async()=>{try{const r=await fetch('/api/upgrade/status');const j=await r.json();
         if(j.status==='paid'){location.href='/premium';return}}catch(e){}poll()},5000)})();
     </script>`;
-  } else if (role === "premium" || role === "vip" || role === "admin") {
-    payBox = notice(`You're ${role === "admin" ? "staff — everything is unlocked" : `subscribed: ${role.toUpperCase()}${user.tier_expires_at ? ` until ${fmtDate(user.tier_expires_at)}` : ""}`}. 🎉`);
+  } else if (role === "premium" || role === "vip") {
+    payBox = notice(`You're subscribed: ${role.toUpperCase()}${user.tier_expires_at ? ` until ${fmtDate(user.tier_expires_at)}` : ""}. 🎉`);
   }
 
   return `${sectionHead("Subscriptions", "Premium & VIP access", "★")}${payBox}${tiers}`;
@@ -467,8 +472,7 @@ async function processPendingOrders(db, env) {
     // Extend from current expiry if still active on the same-or-lower tier.
     const base = u.tier_expires_at && u.tier_expires_at > now() ? u.tier_expires_at : now();
     const newExpiry = base + TIER_DAYS * 86_400_000;
-    const newRole = u.role === "admin" ? "admin" : o.tier;
-    await db.prepare("UPDATE users SET role = ?, tier_expires_at = ? WHERE id = ?").bind(newRole, newExpiry, u.id).run();
+    await db.prepare("UPDATE users SET role = ?, tier_expires_at = ? WHERE id = ?").bind(o.tier, newExpiry, u.id).run();
     await db.prepare("UPDATE upgrade_orders SET status = 'paid', txn_id = ?, paid_at = ? WHERE id = ?").bind(txnId, now(), o.id).run();
     upgraded++;
   }
@@ -567,8 +571,14 @@ async function adminRouter(db, env, request, url, path, method, user) {
     }
     if ((m = path.match(/^\/admin\/accounts\/(\d+)\/role$/))) {
       const role = f.get("role");
-      if (["reader", "premium", "vip", "admin"].includes(role) && Number(m[1]) !== user.id) {
+      if (["reader", "premium", "vip"].includes(role)) {
         await db.prepare("UPDATE users SET role = ?, tier_expires_at = NULL WHERE id = ?").bind(role, Number(m[1])).run();
+      }
+      return redirect("/admin?tab=accounts");
+    }
+    if ((m = path.match(/^\/admin\/accounts\/(\d+)\/staff$/))) {
+      if (Number(m[1]) !== user.id) {
+        await db.prepare("UPDATE users SET is_admin = 1 - is_admin WHERE id = ?").bind(Number(m[1])).run();
       }
       return redirect("/admin?tab=accounts");
     }
@@ -678,7 +688,7 @@ async function adminAnnouncements(db) {
 }
 
 async function adminAccounts(db, url) {
-  const { results } = await db.prepare("SELECT id, username, email, role, tier_expires_at, created_at FROM users ORDER BY created_at DESC LIMIT 500").all();
+  const { results } = await db.prepare("SELECT id, username, email, role, is_admin, tier_expires_at, created_at FROM users ORDER BY created_at DESC LIMIT 500").all();
   const resetToken = url.searchParams.get("reset");
   const resetFor = url.searchParams.get("for");
   const resetHtml = resetToken
@@ -686,14 +696,15 @@ async function adminAccounts(db, url) {
        <span class="mono">${esc(url.origin)}/reset-password?token=${esc(resetToken)}</span></div>`
     : "";
   return `${resetHtml}<div class="list-meta"><span class="count">${results.length} account${results.length === 1 ? "" : "s"}</span></div>
-    <table class="grid"><tr><th>User</th><th>Email</th><th>Role</th><th>Expires</th><th>Joined</th><th></th></tr>
+    <table class="grid"><tr><th>User</th><th>Email</th><th>Subscription</th><th>Staff</th><th>Expires</th><th>Joined</th><th></th></tr>
     ${results
       .map(
         (u) => `<tr>
-        <td>${esc(u.username)}</td><td class="mono">${esc(u.email ?? "")}</td>
+        <td>${esc(u.username)}${u.is_admin ? ' <span class="badge">Staff</span>' : ""}</td><td class="mono">${esc(u.email ?? "")}</td>
         <td><form method="POST" action="/admin/accounts/${u.id}/role" style="display:flex;gap:8px">
-          <select name="role">${["reader", "premium", "vip", "admin"].map((r) => `<option value="${r}"${u.role === r ? " selected" : ""}>${r}</option>`).join("")}</select>
+          <select name="role">${["reader", "premium", "vip"].map((r) => `<option value="${r}"${u.role === r ? " selected" : ""}>${r}</option>`).join("")}</select>
           <button class="chip">Set</button></form></td>
+        <td><form method="POST" action="/admin/accounts/${u.id}/staff"><button class="chip"${u.is_admin ? ' style="background:var(--ink);color:var(--paper)"' : ""}>${u.is_admin ? "Revoke staff" : "Make staff"}</button></form></td>
         <td class="mono">${u.tier_expires_at ? fmtDate(u.tier_expires_at) : "—"}</td>
         <td class="mono">${fmtDate(u.created_at)}</td>
         <td style="white-space:nowrap">

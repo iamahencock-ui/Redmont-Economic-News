@@ -81,25 +81,26 @@ export function sessionClearCookie() {
 }
 
 // --- Tiers --------------------------------------------------------------------
-// Effective tier accounts for expiry without needing a cron: an expired
-// premium/vip user simply reads as 'reader' again.
+// Staff (is_admin) is SEPARATE from the subscription tier. effectiveRole only
+// ever returns the subscription: reader / premium / vip, with expiry applied
+// at read time (no cron needed).
 export function effectiveRole(user) {
   if (!user) return null;
-  if (user.role === "admin") return "admin";
+  if (user.role === "admin") return "reader"; // legacy value safety
   if ((user.role === "premium" || user.role === "vip") && user.tier_expires_at && user.tier_expires_at < Date.now()) {
     return "reader";
   }
   return user.role;
 }
 
-const RANK = { reader: 0, premium: 1, vip: 2, admin: 3 };
+const RANK = { reader: 0, premium: 1, vip: 2 };
 export function canReadTier(user, tier) {
-  // tier: 0 public, 1 premium, 2 vip
+  // tier: 0 public, 1 premium, 2 vip. Staff read everything (they manage it).
   if (tier <= 0) return true;
-  const role = effectiveRole(user);
-  if (!role) return false;
-  return RANK[role] >= tier;
+  if (!user) return false;
+  if (user.is_admin) return true;
+  return (RANK[effectiveRole(user)] ?? 0) >= tier;
 }
 export function isAdmin(user) {
-  return effectiveRole(user) === "admin";
+  return !!(user && user.is_admin);
 }
