@@ -46,6 +46,7 @@ export default {
       const user = await getSessionUser(db, request);
       const P = (t, act, body) => html(page({ title: t, user, active: act, body, isAdmin: isAdmin(user) }));
 
+      
       // ---- public pages ----
       if (method === "GET") {
         if (path === "/") return P("Home", "/", await homePage(db, user));
